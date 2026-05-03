@@ -1,120 +1,57 @@
-<!DOCTYPE html>
-<html lang="zh-Hant">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Arbitrage Bot</title>
-
-<style>
-body {
-  margin:0;
-  font-family:-apple-system;
-  background:#0b1220;
-  color:white;
-  display:flex;
-  justify-content:center;
-  padding:20px;
-}
-
-.card {
-  width:100%;
-  max-width:420px;
-  background:#111a2e;
-  padding:20px;
-  border-radius:16px;
-}
-
-.box {
-  background:#0f172a;
-  padding:12px;
-  margin:10px 0;
-  border-radius:10px;
-}
-
-.price {
-  font-size:20px;
-  font-weight:bold;
-  color:#38bdf8;
-}
-
-.good { color:#34d399; }
-.bad { color:#fb7185; }
-
-.small {
-  font-size:12px;
-  opacity:0.6;
-}
-</style>
-</head>
-
-<body>
-
-<div class="card">
-  <h2>🤖 Arbitrage Bot</h2>
-
-  <div class="box">
-    Binance USDT
-    <div class="price" id="binance">Loading...</div>
-  </div>
-
-  <div class="box">
-    USD → TWD
-    <div class="price" id="twd">Loading...</div>
-  </div>
-
-  <div class="box">
-    USD → PHP
-    <div class="price" id="php">Loading...</div>
-  </div>
-
-  <div class="box">
-    📊 Arbitrage Signal
-    <div class="price" id="signal">Waiting...</div>
-    <div class="small" id="detail"></div>
-  </div>
-
-</div>
-
 <script>
 
 let usdt = 1;
 let twd = 0;
 let php = 0;
 
+async function safeFetch(url) {
+  try {
+    const res = await fetch(url);
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+}
+
 async function load() {
 
-  // 1. Binance price
-  const b = await fetch("https://api.binance.com/api/v3/ticker/price?symbol=USDTUSDT");
-  const bd = await b.json();
-  usdt = parseFloat(bd.price || 1);
+  // ===== Binance =====
+  const b = await safeFetch("https://api.binance.com/api/v3/ticker/price?symbol=USDTUSDT");
 
-  // 2. FX rates
-  const fx = await fetch("https://api.exchangerate-api.com/v4/latest/USD");
-  const fxd = await fx.json();
-  twd = fxd.rates.TWD;
-  php = fxd.rates.PHP;
+  if (b && b.price) {
+    usdt = parseFloat(b.price);
+    document.getElementById("binance").innerText = usdt.toFixed(4);
+  } else {
+    document.getElementById("binance").innerText = "API error";
+  }
 
-  // UI
-  document.getElementById("binance").innerText = usdt.toFixed(4);
-  document.getElementById("twd").innerText = (usdt * twd).toFixed(2);
-  document.getElementById("php").innerText = (usdt * php).toFixed(2);
+  // ===== FX =====
+  const fx = await safeFetch("https://api.exchangerate-api.com/v4/latest/USD");
 
-  // ===== Arbitrage logic =====
-  let marketTwd = usdt * twd;
+  if (fx && fx.rates) {
+    twd = fx.rates.TWD;
+    php = fx.rates.PHP;
 
-  // 模擬另一市場（例如 KAST / OTC / local spread）
-  let altMarket = usdt * twd * 1.01; // +1% 假設差價
+    document.getElementById("twd").innerText = (usdt * twd).toFixed(2);
+    document.getElementById("php").innerText = (usdt * php).toFixed(2);
+  } else {
+    document.getElementById("twd").innerText = "FX error";
+    document.getElementById("php").innerText = "FX error";
+  }
 
-  let spread = altMarket - marketTwd;
+  // ===== Arbitrage =====
+  let market = usdt * twd;
+  let alt = market * 1.01;
 
-  let signal = document.getElementById("signal");
-  let detail = document.getElementById("detail");
+  let spread = alt - market;
 
-  detail.innerText =
-    `Market: ${marketTwd.toFixed(2)} TWD | Alt: ${altMarket.toFixed(2)} TWD`;
+  const signal = document.getElementById("signal");
+  const detail = document.getElementById("detail");
+
+  detail.innerText = `Market: ${market.toFixed(2)} | Alt: ${alt.toFixed(2)}`;
 
   if (spread > 0.5) {
-    signal.innerText = "🟢 ARBITRAGE OPPORTUNITY";
+    signal.innerText = "🟢 OPPORTUNITY";
     signal.className = "price good";
   } else {
     signal.innerText = "🔴 NO OPPORTUNITY";
@@ -122,10 +59,7 @@ async function load() {
   }
 }
 
-setInterval(load, 4000);
+setInterval(load, 5000);
 load();
 
 </script>
-
-</body>
-</html>
